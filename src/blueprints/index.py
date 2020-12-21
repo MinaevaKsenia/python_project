@@ -1,7 +1,12 @@
+import sqlite3
 from flask import Blueprint
 from flask import request
 from utils.database import db
 from utils.response import json_response
+
+from flask import Flask, session, jsonify
+from .db_sqlite import get_db, close_db 
+
 
 bp = Blueprint('index', __name__)
 
@@ -15,8 +20,17 @@ def create_sql(attributes: dict):
     values = tuple()
     return query, values
 
-@bp.route('/', methods=['POST'])
+
+@bp.route('/', methods=['GET', 'POST'])
 def index():
+    #response = {'message': 'Hello World'}
+    #return json_response.success(response)
+
+    if request.method == 'GET':
+        return "Hello"
+    else:
+        return "This is POST!"
+
     # connection = db.connection
 
     # №1
@@ -25,10 +39,8 @@ def index():
     # users = [dict(row) for row in result]
     # response = {'message': 'Hello World'}
 
-    print(request.form['username'])
-
-
-    return json_response.success({'name': int(request.form['num'])*2})
+    #print(request.form['username'])
+    #return json_response.success({'name': int(request.form['num'])*2})
 
     # №2
     #query = """
@@ -59,3 +71,25 @@ def index():
     # connection.execute(query, values)
     # connection.commit()
     return json_response.success()
+
+# из видео:
+#bp.teardown_appcontext(close_db) # при остановке приложения все закрывается, чистится
+bp.secret_key = b'skjdvk' # ключ для шифрования сессий
+
+@bp.route('/ads')
+def get_ads():
+    user_id = session.get('user_id')
+    if user_id is None:
+        return '', 403
+
+    con = get_db()
+    cur = con.execute(
+        'SELECT * '
+        'FROM ad '
+        'WHERE user_id = ?',
+        (user_id),
+    )
+    result = cur.fetchall()
+    #return[dict(row) for row in result]
+    return jsonify([dict(row) for row in result])
+
