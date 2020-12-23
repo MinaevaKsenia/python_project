@@ -3,6 +3,7 @@ from utils.database import db
 from blueprints.index import bp as index_bp
 from blueprints.auth import bp as auth_bp
 from blueprints.categories import bp as categories_bp
+from blueprints.transactions import bp as transactions_bp
 
 
 def create_app():
@@ -14,6 +15,7 @@ def create_app():
     app.register_blueprint(index_bp, url_prefix='/')
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(categories_bp, url_prefix='/categories')
+    app.register_blueprint(transactions_bp, url_prefix='/transactions')
     # Инициализация БД
     db.init_app(app)
     return app

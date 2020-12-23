@@ -9,6 +9,7 @@ class JsonResponse:
     HTTP_CODE_BAD_REQUEST = 400
     HTTP_CODE_FORBIDDEN = 403
     HTTP_CODE_NOT_FOUND = 404
+    HTTP_CODE_NOT_ACCEPTABLE = 406
     HTTP_CODE_CONFLICT = 409
     HTTP_CODE_SERVER_ERROR = 500
     HTTP_CODE_NOT_IMPLEMENTED = 501
@@ -27,6 +28,9 @@ class JsonResponse:
 
     def not_found(self, data: dict = None):
         return self._response(self.HTTP_CODE_NOT_FOUND, data)
+
+    def not_acceptable(self, data: dict = None):
+        return self._response(self.HTTP_CODE_NOT_ACCEPTABLE, data)
 
     def unauthorized(self, data: dict = None):
         return self._response(self.HTTP_CODE_UNAUTHORIZED, data)

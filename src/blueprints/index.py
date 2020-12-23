@@ -5,7 +5,6 @@ from utils.database import db
 from utils.response import json_response
 
 from flask import Flask, session, jsonify
-from .db_sqlite import get_db, close_db 
 
 
 bp = Blueprint('index', __name__)
@@ -76,20 +75,5 @@ def index():
 #bp.teardown_appcontext(close_db) # при остановке приложения все закрывается, чистится
 bp.secret_key = b'skjdvk' # ключ для шифрования сессий
 
-@bp.route('/ads')
-def get_ads():
-    user_id = session.get('user_id')
-    if user_id is None:
-        return '', 403
 
-    con = get_db()
-    cur = con.execute(
-        'SELECT * '
-        'FROM ad '
-        'WHERE user_id = ?',
-        (user_id),
-    )
-    result = cur.fetchall()
-    #return[dict(row) for row in result]
-    return jsonify([dict(row) for row in result])
 
