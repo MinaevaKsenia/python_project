@@ -13,7 +13,7 @@ def create_app():
     app.config.from_object('config.Config')
     # Регистрация Blueprint
     app.register_blueprint(index_bp, url_prefix='/')
-    app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.register_blueprint(auth_bp, url_prefix='/auth/')
     app.register_blueprint(categories_bp, url_prefix='/categories')
     app.register_blueprint(transactions_bp, url_prefix='/transactions')
     # Инициализация БД

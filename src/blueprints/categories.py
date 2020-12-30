@@ -3,160 +3,72 @@ from utils.database import db
 from flask import Blueprint, request, session, jsonify
 from flask.views import MethodView
 from utils.response import json_response
-from blueprints.functions import *
 from utils.messages import message
-
+from services.categories import CategoryService, Unauthorized, CategoryExists, CategoryNotFound, CategoryNameExists
 
 
 bp = Blueprint('categories', __name__)
 
 class CategoriesView(MethodView):
     def __init__(self):
-       self.connection = db.connection
-       self.user_id = session['user_id'] if session.get('user_id') else None
-        
-    def get(self): 
-        if not self.user_id:
-            return json_response.forbidden(message.MSG_NO_RIGHTS)
-        temp = self.connection.execute(
-           'SELECT id, name FROM categories WHERE user_id = ?',
-           (self.user_id, ) 
-        )
-        rows = temp.fetchall()
-        if rows is None:
-            return json_response.success(message.MSG_NOT_CAT)
-        return jsonify([dict(row) for row in rows])
+        self.category_service = CategoryService()
+
+    def get(self):
+        try:
+            categories = self.category_service.get()
+        except Unauthorized:
+            return json_response.unauthorized()
+        return json_response.success(categories)
 
     def post(self):
-        if not self.user_id:
-            json_response.forbidden(message.MSG_NO_RIGHTS)
-
-        request_json = request.json
-        name = request_json.get('name')
-
-        if not name:
+        data = request.get_json()
+        
+        if not data['name']:
             return json_response.bad_request(message.MSG_EMPTY_FIELD)
-
-        temp = self.connection.execute(
-            'SELECT name FROM categories WHERE user_id = ? AND name = ?',
-            (self.user_id, name, )
-        )
-        if temp.fetchone():
-            return json_response.not_acceptable(message.MSG_CAT_EXIST)
-
         try:
-            temp = self.connection.execute(
-                'INSERT INTO categories (name, user_id) VALUES(?, ?)',
-                (name, self.user_id, )
-            )
-        except sqlite3.IntegrityError:
-            return json_response.conflict(message.MSG_REQ_FAILED)
-        self.connection.commit()
-
-        temp = self.connection.execute(
-            'SELECT last_insert_rowid() as id'
-        )
-        id = temp.fetchone()['id']
-
-        return json_response.created({
-            "id": id,
-            "name": name
-        })
-
+            category = self.category_service.post(data)
+        except Unauthorized:
+            return json_response.unauthorized()
+        except (CategoryExists, CategoryNotFound) as e:
+            return json_response.conflict()
+        return json_response.created(category)
+        
 
 class CategoryView(MethodView):
     def __init__(self):
-       self.connection = db.connection
-       self.user_id = session['user_id']
+        self.category_service = CategoryService()
 
     def patch(self, id):
-        if not self.user_id:
-            json_response.forbidden(message.MSG_NO_RIGHTS)
-
-        request_json = request.json
-        name = request_json.get('name')
-
-        temp = self.connection.execute(
-            'SELECT * FROM categories WHERE id = ? AND user_id = ?',
-            (id, self.user_id)
-        )
-        row = temp.fetchone()
-        if not row:
-            return json_response.not_found(message.MSG_NOT_CAT_BY_ID)
-
-        if not name:
+        data = request.get_json()
+        if not data['name']:
             return json_response.bad_request(message.MSG_EMPTY_FIELD)
-
-        temp = self.connection.execute(
-            'SELECT name FROM categories WHERE name = ?',
-            (name, )
-        )
-        if temp.fetchone():
-            return json_response.not_acceptable(message.MSG_CAT_EXIST)
-
         try:
-            temp = self.connection.execute(
-                'UPDATE categories '
-                'SET name = ? '
-                'WHERE id = ?',
-                (name, id, )
-            )
-        except sqlite3.IntegrityError:
-            return json_response.conflict(message.MSG_REQ_FAILED)
-        self.connection.commit()
-
-        return json_response.created({
-            "id": id,
-            "name": name
-        })
+            category = self.category_service.patch(id, data)
+        except Unauthorized:
+            return json_response.unauthorized()
+        except (CategoryNotFound, CategoryNameExists):
+            return json_response.conflict()
+        return json_response.created(category)
 
     def get(self, id):
-        if not self.user_id:
-            json_response.forbidden(message.MSG_NO_RIGHTS)
-
-        temp = self.connection.execute(
-            'SELECT * FROM categories WHERE id = ? AND user_id = ?',
-            (id, self.user_id)
-        )
-        row = temp.fetchone()
-        if not row:
-            return json_response.not_found(message.MSG_NOT_CAT_BY_ID)
-
-        temp = self.connection.execute(
-        'SELECT name FROM categories WHERE id = ?',
-        (id, )
-        )
-        name = temp.fetchone()['name']
-
-        return json_response.success({
-            "id": id,
-            "name": name
-        })
-
-    def delete(self, id):
-        if not self.user_id:
-            json_response.forbidden(message.MSG_NO_RIGHTS)
-
-        temp = self.connection.execute(
-            'SELECT * FROM categories WHERE id = ? AND user_id = ?',
-            (id, self.user_id)
-        )
-        row = temp.fetchone()
-        if not row:
-            return json_response.not_found(message.MSG_NOT_CAT_BY_ID)
-
         try:
-            temp = self.connection.execute(
-                'DELETE FROM categories '
-                'WHERE id = ?',
-                (id, )
-            )
-        except sqlite3.IntegrityError:
-            return json_response.conflict(message.MSG_REQ_FAILED)
-        self.connection.commit()
-
+            category = self.category_service.get_category(id)
+        except Unauthorized:
+            return json_response.unauthorized()
+        except CategoryNotFound:
+            return json_response.not_found()
+        return json_response.success(category)
+        
+    def delete(self, id):
+        try:
+            category = self.category_service.delete(id)
+        except Unauthorized:
+            return json_response.unauthorized()
+        except CategoryNotFound:
+            return json_response.not_found()
         return json_response.deleted()
 
+    
 
 bp.add_url_rule('', view_func=CategoriesView.as_view('categories_view'))
 bp.add_url_rule('/<int:id>/', view_func=CategoryView.as_view('category'))

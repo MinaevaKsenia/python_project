@@ -4,93 +4,56 @@ from flask import Blueprint, request, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from .validators import *
 from utils.response import json_response
+from services.auth import (
+    AuthService,
+    UserNotFound,
+    InvalidCredentials,
+    EmailAlreadyExist
+)
 
 
 bp = Blueprint('auth', __name__)
 
 @bp.route('/login', methods=['POST'])
 def login():
-    request_json = request.json
-    email = request_json.get('email')
-    password = request_json.get('password')
+    data = request.get_json()
+    auth_service = AuthService()
 
-    if not email or not password:
+    if not data['email'] or not data['password']:
         return json_response.bad_request({'error_msg': 'Не заполнено поле Email или Пароль!'})
     
-    if not check_validate_email(email):
+    if not check_validate_email(data['email']):
         return json_response.bad_request({'error_msg': 'Неверный формат Email!'})
-
-    connection = db.connection
-    cur = connection.execute(
-        'SELECT * '
-        'FROM users '
-        'WHERE email = ?',
-        (email, ),
-    )
-    user = cur.fetchone()
-
-    if user is None:
-        return json_response.forbidden({'error_msg': 'Неверный email!'})
-
-    if not check_password_hash(user['password'], password):
-        return json_response.forbidden({'error_msg': 'Неверный Пароль!'})
-
-    session['user_id'] = user['id']
-    return json_response.success({'message': 'Успешная авторизация!'})
-
-@bp.route('register', methods=['POST'])
-def register():
-    request_json = request.json
-    first_name = request_json.get('first_name')
-    last_name = request_json.get('last_name')
-    email = request_json.get('email')
-    password = request_json.get('password')
-
-    if not first_name or not last_name or not email or not password:
-        return json_response.bad_request({'error_msg': 'Не заполнено одно из полей!'})
-
-    if not check_validate_email(email):
-        return json_response.bad_request({'error_msg': 'Неверный формат Email!'})
-
-    if not check_validate_password(password):
-        return json_response.bad_request({'error_msg': 'Неверная длина пароля! Длина пароля должна быть от 5 до 100 символов.'})
-
-    connection = db.connection
-    cur = connection.execute(
-        'SELECT email '
-        'FROM users '
-        'WHERE email = ?',
-        (email, ),
-    )
-    if cur.fetchone():
-        return json_response.not_acceptable({'message': 'Пользователь с таким Email уже существует!'})
-
-    password_hash = generate_password_hash(password)
 
     try:
-        connection.execute(
-            'INSERT INTO users (first_name, last_name, email, password) '
-            'VALUES (?, ?, ?, ?)',
-            (first_name, last_name, email, password_hash),
-        )        
-    except sqlite3.IntegrityError:
-        return json_response.conflict({'message': 'Не удалось выполнить запрос!'})
-    connection.commit()
+        auth_service.login(data['email'], data['password'])
+    except (UserNotFound, InvalidCredentials) as e:
+        return json_response.unauthorized()
+    return json_response.success()
 
-    cur = connection.execute(
-        'SELECT id FROM users WHERE email = ?',
-        (email, ),
-    )
-    id = cur.fetchone()['id']
+@bp.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    auth_service = AuthService()
+    
+    if not data['first_name'] or not data['last_name'] or not data['email'] or not data['password']:
+        return json_response.bad_request({'error_msg': 'Не заполнено одно из полей!'})
 
-    return json_response.created({
-            "id": id,
-            "email": email,
-            "first_name": first_name,
-            "last_name": last_name
-        })
+    if not check_validate_email(data['email']):
+        return json_response.bad_request({'error_msg': 'Неверный формат Email!'})
 
-@bp.route('logout', methods=['GET'])
+    if not check_validate_password(data['password']):
+        return json_response.bad_request({'error_msg': 'Неверная длина пароля! Длина пароля должна быть от 5 до 100 символов.'})
+
+    try:
+        user = auth_service.register(data)
+    except EmailAlreadyExist:
+        return json_response.conflict()
+    return json_response.success(user)
+
+
+@bp.route('/logout', methods=['GET'])
 def logout():
-    session.pop('user_id', None)
+    auth_service = AuthService()
+    auth_service.logout()
     return json_response.success()
